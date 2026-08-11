@@ -8,8 +8,8 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "2mb" }));
-app.use("/uploads", express.static(path.resolve(__dirname, "..", "data", "uploads")));
-app.use(express.static(path.resolve(__dirname, "..", "public")));
+app.use("/uploads", express.static(path.resolve(process.cwd(), "data", "uploads")));
+app.use(express.static(path.resolve(process.cwd(), "public")));
 
 app.use("/api/recalls", recallsRouter);
 app.use("/api/ingest", ingestRouter);

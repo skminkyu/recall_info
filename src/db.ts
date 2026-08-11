@@ -3,7 +3,11 @@ import path from "node:path";
 import fs from "node:fs";
 import { NormalizedRecall, RecallRow, MatchRequestRow } from "./types";
 
-const DATA_DIR = path.resolve(__dirname, "..", "data");
+// Resolved from the process's working directory (always the repo root when
+// started via the npm scripts) rather than __dirname, since __dirname's
+// depth differs between `tsx src/db.ts` (dev) and the tsc-compiled
+// `dist/src/db.js` (production) — process.cwd() is stable across both.
+const DATA_DIR = path.resolve(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = process.env.RECALL_DB_PATH ?? path.join(DATA_DIR, "recall_info.db");

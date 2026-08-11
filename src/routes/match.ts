@@ -7,7 +7,7 @@ import { db, matchRequestRowToJson } from "../db";
 
 export const matchRouter = Router();
 
-const UPLOAD_DIR = path.resolve(__dirname, "..", "..", "data", "uploads");
+const UPLOAD_DIR = path.resolve(process.cwd(), "data", "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -55,7 +55,7 @@ matchRouter.post("/", upload.single("photo"), (req, res) => {
   const id = randomUUID();
   insertStmt.run({
     id,
-    image_path: path.relative(path.resolve(__dirname, "..", ".."), req.file.path),
+    image_path: path.relative(process.cwd(), req.file.path),
     note: typeof req.body?.note === "string" ? req.body.note : null,
   });
 

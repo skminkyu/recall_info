@@ -17,7 +17,7 @@ import { upsertRecalls } from "../src/db";
 import { normalize } from "../src/normalize";
 import { SourceType } from "../src/types";
 
-const SEEDS_DIR = path.resolve(__dirname, "..", "data", "seeds");
+const SEEDS_DIR = path.resolve(process.cwd(), "data", "seeds");
 
 function inferSourceType(fileName: string): SourceType | null {
   if (fileName.startsWith("domestic")) return "domestic";

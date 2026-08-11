@@ -42,6 +42,12 @@ npm run dev      # http://localhost:3000
 조직의 Claude Code Remote 설정상 불가능합니다(트리거 세션에 MCP 커넥터를 전달할
 수 없음) — 자세한 내용과 대안은 `docs/INGESTION.md`의 "주기적 수집" 절 참고.
 
+## 배포 (공개 URL)
+
+`render.yaml`이 포함돼 있어 [Render](https://render.com)에 Blueprint로 바로 배포할
+수 있습니다. 계정 연결처럼 사람이 직접 해야 하는 단계가 있어 순서는
+`docs/DEPLOY.md`에 정리했습니다.
+
 ## API
 
 | Method | Path | 설명 |

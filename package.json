@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "description": "국내/해외 리콜 제품 정보 누적 관리 및 사진 기반 유사 리콜 후보 탐색 시스템",
   "private": true,
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "build": "tsc -p tsconfig.json",
     "ingest": "tsx scripts/ingest-file.ts",
     "seed": "tsx scripts/seed-all.ts",
+    "seed:prod": "node dist/scripts/seed-all.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
