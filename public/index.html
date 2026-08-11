@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>recall_info · 리콜 정보</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📋 recall_info</h1>
+    <nav>
+      <a href="/" class="active">리콜 목록</a>
+      <a href="/match.html">사진으로 유사 제품 찾기</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="stats-bar" id="stats"></div>
+
+    <form class="search-form" id="search-form">
+      <input type="text" name="q" placeholder="제품명, 브랜드, 모델, 위해내용 검색" />
+      <select name="source_type">
+        <option value="">전체 출처</option>
+        <option value="domestic">국내</option>
+        <option value="overseas">해외</option>
+      </select>
+      <input type="text" name="brand" placeholder="브랜드" />
+      <button type="submit">검색</button>
+    </form>
+
+    <div id="results"></div>
+    <div class="pagination" id="pagination"></div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

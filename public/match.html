@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>recall_info · 사진으로 유사 제품 찾기</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📋 recall_info</h1>
+    <nav>
+      <a href="/">리콜 목록</a>
+      <a href="/match.html" class="active">사진으로 유사 제품 찾기</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="upload-box">
+      <form id="upload-form">
+        <p style="margin-top:0; color:var(--text-muted); font-size:13px;">
+          제품 사진을 업로드하면 요청이 등록됩니다. Claude 세션이 사진을 분석하여
+          국내/해외 리콜 데이터베이스에서 유사 제품 후보를 찾아 결과를 채워줍니다.
+        </p>
+        <input type="file" name="photo" accept="image/*" required />
+        <br /><br />
+        <input type="text" name="note" placeholder="메모 (선택, 예: 어디서 구매했는지 등)" style="width:60%; padding:8px; border-radius:8px; border:1px solid var(--border);" />
+        <br /><br />
+        <button type="submit">업로드하고 분석 요청</button>
+      </form>
+    </div>
+
+    <h2 style="font-size:15px;">매칭 요청 내역</h2>
+    <div id="requests"></div>
+  </main>
+
+  <script src="/match.js"></script>
+</body>
+</html>
