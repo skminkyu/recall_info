@@ -2,11 +2,47 @@ import { db } from "./db";
 import { MatchCandidate } from "./types";
 import { ProductAnalysis } from "./vision";
 
-const MAX_TERMS = 15;
+const MAX_TERMS = 20;
 const MIN_TERM_LENGTH = 2;
 
+// Korean recall titles use inconsistent color vocabulary (e.g. "그린" vs
+// "녹색"). Expand each extracted color into its common synonyms so a color
+// shared with a recall's title can still match even when the exact word
+// differs — this is what let a visually-similar-but-differently-named
+// product (e.g. a dark green cylindrical device) surface a weak match
+// against an unrelated recall that merely shares that color in its title.
+const COLOR_SYNONYMS: Record<string, string[]> = {
+  그린: ["녹색"], 녹색: ["그린"],
+  화이트: ["흰색", "백색"], 흰색: ["화이트"],
+  블랙: ["검정", "검은색"], 검정: ["블랙"],
+  레드: ["빨간색", "적색"], 빨간색: ["레드"],
+  블루: ["파란색", "청색"], 파란색: ["블루"],
+  옐로우: ["노란색"], 노란색: ["옐로우"],
+  핑크: ["분홍색"], 분홍색: ["핑크"],
+  그레이: ["회색"], 회색: ["그레이"],
+  브라운: ["갈색"], 갈색: ["브라운"],
+  퍼플: ["보라색"], 보라색: ["퍼플"],
+  오렌지: ["주황색"], 주황색: ["오렌지"],
+};
+
+function expandColorTerm(color: string): string[] {
+  // "다크그린" 처럼 수식어가 붙은 색상명에서도 기본 색상 단어를 뽑아낸다.
+  const base = Object.keys(COLOR_SYNONYMS).find((key) => color.includes(key));
+  if (!base) return [color];
+  return [base, ...COLOR_SYNONYMS[base]];
+}
+
 function collectTerms(analysis: ProductAnalysis): string[] {
-  const raw = [analysis.name, analysis.brand, analysis.model, analysis.category, ...analysis.keywords, ...analysis.markings];
+  const colorTerms = analysis.colors.flatMap(expandColorTerm);
+  const raw = [
+    analysis.name,
+    analysis.brand,
+    analysis.model,
+    analysis.category,
+    ...analysis.keywords,
+    ...analysis.markings,
+    ...colorTerms,
+  ];
 
   const seen = new Set<string>();
   const terms: string[] = [];
