@@ -7,6 +7,23 @@ function firstNonEmpty(...values: Array<unknown>): string | null {
   return null;
 }
 
+function joinNonEmpty(separator: string, ...values: Array<unknown>): string | null {
+  const parts = values.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  return parts.length > 0 ? parts.join(separator) : null;
+}
+
+/**
+ * Some MCP tools (fetch/get_recall_detail) return a single record wrapped
+ * as `{ data: {...} }` rather than the bare item found inside a search
+ * result's `data` array. Unwrap it so both shapes normalize the same way.
+ */
+function unwrapSingle(raw: any): any {
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && raw.data && typeof raw.data === "object") {
+    return raw.data;
+  }
+  return raw;
+}
+
 function toImageUrls(...groups: Array<unknown>): string[] {
   const urls: string[] = [];
   for (const group of groups) {
@@ -31,7 +48,8 @@ function toImageUrls(...groups: Array<unknown>): string[] {
  * Normalizes a raw record from the domestic recall MCP (SafetyKorea /
  * 한국제품안전협회 source: mcp__MCP__list_recent_recalls / search / fetch).
  */
-export function normalizeDomestic(raw: any): NormalizedRecall {
+export function normalizeDomestic(rawInput: any): NormalizedRecall {
+  const raw = unwrapSingle(rawInput);
   const externalId = String(raw.recall_uid ?? raw.id ?? "");
   const sourceCode = "KR";
   const product = raw.product ?? {};
@@ -88,9 +106,21 @@ const OVERSEAS_SOURCE_LABELS: Record<string, string> = {
  * sources: mcp__MCP-c805d72e__search_recalls / find_recalls_by_model /
  * get_recall_detail).
  */
-export function normalizeOverseas(raw: any): NormalizedRecall {
+export function normalizeOverseas(rawInput: any): NormalizedRecall {
+  const raw = unwrapSingle(rawInput);
   const sourceCode = String(raw.source ?? "");
   const externalId = String(raw.guid ?? raw.id ?? "");
+
+  // get_recall_detail includes a country of manufacture and a fuller
+  // remedy description (remedy_type + consumer_action) that the lighter
+  // search_recalls/find_recalls_by_model results don't carry.
+  const manufacturer = joinNonEmpty(
+    " · ",
+    firstNonEmpty(raw.manufacturer_name, raw.manufacturer),
+    raw.country_of_origin ? `제조국: ${raw.country_of_origin}` : null
+  );
+  const correctiveAction = firstNonEmpty(raw.corrective_action, raw.remedy) ??
+    joinNonEmpty("\n", raw.remedy_type, raw.consumer_action);
 
   return {
     id: `overseas:${sourceCode}:${externalId}`,
@@ -101,15 +131,15 @@ export function normalizeOverseas(raw: any): NormalizedRecall {
     title_original: firstNonEmpty(raw.product_name_original),
     brand: firstNonEmpty(raw.brand_name),
     model: firstNonEmpty(raw.model_name),
-    manufacturer: firstNonEmpty(raw.manufacturer, raw.manufacturer_name),
-    hazard: firstNonEmpty(raw.hazard_description, raw.hazard_type),
-    hazard_original: null,
+    manufacturer,
+    hazard: firstNonEmpty(raw.hazard_description, raw.hazard_type, raw.recall_cause),
+    hazard_original: firstNonEmpty(raw.hazard_description_original),
     risk_level: firstNonEmpty(raw.risk_level),
-    corrective_action: firstNonEmpty(raw.corrective_action, raw.remedy),
+    corrective_action: correctiveAction,
     country: firstNonEmpty(raw.recall_country, OVERSEAS_SOURCE_LABELS[sourceCode]),
     published_date: firstNonEmpty(raw.published_date),
     source_url: firstNonEmpty(raw.source_url),
-    image_urls: toImageUrls(raw.image_1, raw.images),
+    image_urls: toImageUrls(raw.image_1, raw.image_2, raw.image_3, raw.image_4, raw.image_5, raw.images),
     korea_relevance: typeof raw.korea_relevance === "boolean" ? raw.korea_relevance : null,
     raw,
   };

@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "ingest": "tsx scripts/ingest-file.ts",
-    "seed": "tsx scripts/ingest-file.ts data/seeds/domestic-2026-08-11.json domestic && tsx scripts/ingest-file.ts data/seeds/overseas-2026-08-11.json overseas",
+    "seed": "tsx scripts/seed-all.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

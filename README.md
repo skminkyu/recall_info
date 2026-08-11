@@ -13,9 +13,13 @@
 - Node.js + TypeScript + Express, SQLite(better-sqlite3, FTS5 전문검색)
 - `src/` — 서버, DB 스키마, 정규화 로직, API 라우트
 - `public/` — 정적 웹 UI (리콜 목록/검색, 사진 업로드 매칭)
-- `scripts/ingest-file.ts` — MCP 원본 JSON을 DB로 적재하는 CLI
-- `data/seeds/` — 최초 적재된 실데이터 스냅샷(국내 50건, 해외 100건, 2026-08-11 기준)
-- `docs/INGESTION.md` — MCP 데이터 수집 및 사진 매칭 워크플로 상세 설명 (**필독**)
+- `scripts/ingest-file.ts` — MCP 원본 JSON 파일 하나를 DB로 적재하는 CLI
+- `scripts/seed-all.ts` — `data/seeds/*.json` 전체를 재적재해 DB를 복원/갱신 (`npm run seed`)
+- `data/seeds/` — git에 커밋되는 영속적인 원본 데이터 로그(날짜별 MCP 원본 JSON).
+  SQLite DB 파일 자체는 gitignore 대상이라 컨테이너가 새로 떠도 여기서 항상
+  재구성됩니다. 현재 국내 50건 + 해외 100건(2026-08-11 최초 수집분) 포함
+- `docs/INGESTION.md` — MCP 데이터 수집 및 사진 매칭 워크플로 상세 설명 (**필독**,
+  특히 "주기적 수집" 관련 알려진 제약사항)
 
 MCP 도구는 Claude 세션 안에서만 호출 가능하므로, 이 저장소의 앱은 "MCP를 직접
 호출하는 서버"가 아니라 "Claude 세션이 MCP를 호출해 넣어주는 데이터를 누적·검색·
@@ -25,13 +29,18 @@ MCP 도구는 Claude 세션 안에서만 호출 가능하므로, 이 저장소�
 
 ```bash
 npm install
-npm run seed    # (최초 1회) 시드 데이터 적재 — 국내 50건 + 해외 100건
+npm run seed    # data/seeds/*.json 전체를 적재해 로컬 DB 생성/갱신
 npm run dev      # http://localhost:3000
 ```
 
 - `npm run build && npm start` — 프로덕션 실행
 - `npm run typecheck` — 타입 체크
-- `npm run ingest -- <file.json> [domestic|overseas]` — 새 MCP 데이터 적재
+- `npm run ingest -- <file.json> [domestic|overseas]` — 새 MCP 데이터 파일 하나만 적재
+
+새 리콜 데이터를 수집하려면(대화로 "리콜 수집해줘" 요청) `docs/INGESTION.md`를
+참고하세요. **참고**: 예약 실행(Routine)으로 수집을 완전 자동화하는 것은 현재 이
+조직의 Claude Code Remote 설정상 불가능합니다(트리거 세션에 MCP 커넥터를 전달할
+수 없음) — 자세한 내용과 대안은 `docs/INGESTION.md`의 "주기적 수집" 절 참고.
 
 ## API
 
