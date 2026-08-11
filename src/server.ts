@@ -8,7 +8,10 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "2mb" }));
-app.use("/uploads", express.static(path.resolve(process.cwd(), "data", "uploads")));
+// match_requests.image_path is stored relative to the repo root (e.g.
+// "data/uploads/xxx.jpg" — see routes/match.ts), so mount the static
+// server at that same "/data/uploads" prefix rather than "/uploads".
+app.use("/data/uploads", express.static(path.resolve(process.cwd(), "data", "uploads")));
 app.use(express.static(path.resolve(process.cwd(), "public")));
 
 app.use("/api/recalls", recallsRouter);
