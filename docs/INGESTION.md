@@ -1,24 +1,27 @@
 # 리콜 데이터 수집 & 사진 매칭 워크플로
 
-이 앱(SQLite + Express)은 MCP 커넥터를 직접 호출하지 못합니다. MCP 도구(`mcp__MCP__*`,
-`mcp__MCP-c805d72e__*`)는 Claude 세션 안에서만 호출할 수 있기 때문에, 데이터 수집과
-사진 분석은 **Claude 세션(대화형 또는 예약된 Routine)** 이 대신 수행하고, 결과를 이
-앱의 REST API로 전달하는 구조입니다.
+이 앱(SQLite + Express)은 두 가지를 서로 다른 방식으로 처리합니다.
+
+- **리콜 데이터 수집**(1절): MCP 도구(`mcp__MCP__*`, `mcp__MCP-c805d72e__*`)는
+  Claude 세션 안에서만 호출 가능하므로, **Claude 세션(대화형 또는 예약된
+  Routine)** 이 대신 MCP를 호출해 결과를 이 앱의 REST API로 전달합니다.
+- **사진으로 유사 제품 찾기**(2절): 서버가 **Anthropic API를 직접 호출**해
+  업로드 즉시 자동으로 처리합니다. Claude 세션 개입 없이 동작합니다.
 
 ```
-[국내리콜 MCP]  [해외리콜 MCP]
-      \              /
-       \            /
-      Claude 세션 / Routine  ──(사진 첨부 대화)──▶ 사용자
-              │
-              ▼
-     POST /api/ingest, PATCH /api/match-requests/:id
-              │
-              ▼
-        SQLite (recalls, match_requests)
-              │
-              ▼
-        웹 UI (/ , /match.html)
+[국내리콜 MCP]  [해외리콜 MCP]              [Anthropic API]
+      \              /                          ▲
+       \            /                           │ 업로드 즉시 자동 호출
+      Claude 세션 / Routine                     │
+              │                        POST /api/match-requests
+              ▼                                 │
+     POST /api/ingest                           │
+              │                                 │
+              ▼                                 ▼
+        SQLite (recalls) ◀──────────── SQLite (match_requests)
+              │                                 │
+              ▼                                 ▼
+              웹 UI (/ , /match.html)
 ```
 
 ## 1. 리콜 데이터 수집 (국내 + 해외)
@@ -101,37 +104,60 @@ Claude Code Remote의 Routine(예약 실행, `create_trigger`)으로 "매주 자
    히스토리에 있던 최초 시도 프롬프트(주간, 월요일 00:00 UTC 실행)를 그대로 재사용해
    `create_trigger`로 재생성하면 됩니다.
 
-## 2. 사진으로 유사 리콜 후보 찾기
+## 2. 사진으로 유사 리콜 후보 찾기 (서버가 업로드 즉시 자동 처리)
 
-1. 사용자가 `/match.html`에서 제품 사진을 업로드하면 `POST /api/match-requests`가
-   `match_requests` 테이블에 `status: pending` 레코드를 만들고 이미지를
-   `data/uploads/`에 저장합니다.
-2. Claude 세션이 (대화 중 직접, 또는 pending 요청을 감지하는 Routine을 통해) 다음을 수행합니다.
-   - 이미지를 열어보고 `mcp__MCP__match_recall_by_image_features`가 요구하는
-     `analysis` 스키마(schema_version "2.0": `product_identity`, `visual_attributes`,
-     `ocr_text`, `confidence` 등)를 직접 채워 호출 → **국내** 후보 획득.
-   - 이미지에서 읽은 브랜드/모델/제품군 키워드로 `mcp__MCP-c805d72e__find_recalls_by_model`
-     또는 `search_recalls`를 호출 → **해외** 후보 획득.
-   - 두 결과를 합쳐 `MatchCandidate[]` 형태(`src/types.ts` 참고: `recall_id, source_type,
-     source_code, title, brand, model, similarity, reason, url, image_url`)로 정리합니다.
-3. 결과를 아래처럼 반영합니다.
+MCP 이미지 매칭 도구(`mcp__MCP__match_recall_by_image_features`)는 Claude 세션
+안에서만 호출 가능해서 배포된 웹서버가 스스로 쓸 수 없습니다. 대신 서버가
+**Anthropic API(비전 + 구조화 출력)를 직접 호출**해 사진을 분석하고, 그 결과를
+이미 누적해둔 로컬 `recalls` 테이블(FTS5)과 텍스트 유사도로 대조합니다 — 실시간
+MCP 조회가 아니라 그때까지 수집된 데이터 안에서 찾는 것이라, 최신성은 주기적
+수집(1절)에 달려 있습니다.
+
+### 흐름
+
+1. 사용자가 `/match.html`에서 사진을 올리면 `POST /api/match-requests`가 파일을
+   `data/uploads/`에 저장하고, **같은 요청 안에서 동기적으로** 다음을 수행합니다.
+   - `src/vision.ts`의 `analyzeProductImage()`가 Anthropic API(`claude-opus-5`,
+     이미지 입력 + `output_config.format`으로 구조화된 JSON 강제)를 호출해
+     `category/name/brand/model/colors/markings/keywords/confidence`를 추출.
+   - `src/matching.ts`의 `findSimilarRecalls()`가 추출된 키워드로
+     `recalls_fts` MATCH 쿼리(OR 조합)를 실행하고 `bm25()` 순위로 정렬해
+     상위 8건을 `MatchCandidate[]`로 반환. `similarity`는 bm25 원점수가 아니라
+     **순위 기반 근사치**(0.95부터 0.08씩 감소, 최저 0.3)입니다 — 진짜 이미지
+     임베딩 유사도가 아니라 텍스트 키워드 매칭이라는 점을 UI에도 명시합니다.
+   - 성공하면 `status: completed` + `analysis`/`candidates`로 갱신, 실패(API
+     키 없음/오류 등)하면 `status: failed` + 에러 메시지를 `note`에 남기고
+     항상 200번대로 응답합니다(요청 자체는 실패하지 않음).
+2. 응답에 이미 분석 결과가 담겨 있으므로 프론트엔드는 업로드 fetch가 끝나는
+   즉시 후보 목록을 렌더링합니다(폴링에 의존하지 않음).
+
+### 필요 설정
+
+`ANTHROPIC_API_KEY` 환경변수가 필요합니다(로컬은 `.env.example` 참고, Render는
+`docs/DEPLOY.md`의 안내대로 대시보드에서 직접 입력). 키가 없거나 API 호출이
+실패하면 요청 자체가 500을 내지 않고 해당 `match_requests` 행만 `failed`로
+표시됩니다.
+
+### 수동 개입이 필요할 때
+
+`PATCH /api/match-requests/:id`는 그대로 남아 있어서, 자동 분석이 실패했거나
+결과를 더 다듬고 싶을 때 이 대화(Claude 세션)에서 사진을 직접 보고 MCP
+(`mcp__MCP__match_recall_by_image_features`, `mcp__MCP-c805d72e__search_recalls`
+등)까지 활용해 결과를 덮어쓸 수 있습니다:
 
 ```bash
 curl -X PATCH http://localhost:3000/api/match-requests/<id> \
   -H "Content-Type: application/json" \
   -d '{
     "status": "completed",
-    "analysis": { ... match_recall_by_image_features에 보낸 analysis 객체 ... },
+    "analysis": { ... },
     "candidates": [
       {"recall_id":"domestic:KR:10022790","source_type":"domestic","source_code":"KR",
        "title":"Manual Motor starter","brand":"ABB","model":"MS116","similarity":0.82,
-       "reason":"제품 형태/컬러 유사","url":"https://...","image_url":null}
+       "reason":"MCP 이미지 매칭 결과","url":"https://...","image_url":null}
     ]
   }'
 ```
 
-4. 웹 UI(`/match.html`)는 5초마다 폴링하며 완료된 요청의 후보 목록을 보여줍니다.
-
-> 참고: `match_recall_by_image_features`의 결과는 "유사 후보"일 뿐, 최종 동일 제품
-> 판정은 모델명·표시·위해 정보 대조가 필요하다는 것이 MCP 도구 설명에 명시되어 있습니다.
-> UI에도 이를 감안해 "후보"로만 표기합니다.
+> 참고: 자동/수동 어느 경로든 결과는 "관련 후보"일 뿐이며, 최종 동일 제품 판정은
+> 모델명·표시·위해 정보 대조가 필요합니다. UI에도 "후보"/"유사도"로만 표기합니다.

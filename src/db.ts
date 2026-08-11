@@ -71,7 +71,7 @@ END;
 CREATE TABLE IF NOT EXISTS match_requests (
   id TEXT PRIMARY KEY,
   image_path TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
   note TEXT,
   analysis_json TEXT,
   candidates_json TEXT,

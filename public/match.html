@@ -19,8 +19,9 @@
     <div class="upload-box">
       <form id="upload-form">
         <p style="margin-top:0; color:var(--text-muted); font-size:13px;">
-          제품 사진을 업로드하면 요청이 등록됩니다. Claude 세션이 사진을 분석하여
-          국내/해외 리콜 데이터베이스에서 유사 제품 후보를 찾아 결과를 채워줍니다.
+          제품 사진을 업로드하면 서버가 즉시 사진을 분석해서(수 초 소요) 지금까지
+          누적된 국내/해외 리콜 데이터베이스에서 관련 제품을 유사도 순으로 찾아
+          그 자리에서 보여줍니다.
         </p>
         <input type="file" name="photo" accept="image/*" required />
         <br /><br />

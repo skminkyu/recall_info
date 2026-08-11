@@ -239,6 +239,7 @@ button.secondary {
 }
 
 .status-pill.pending { background: #f5a623; color: white; }
+.status-pill.processing { background: var(--accent); color: white; }
 .status-pill.completed { background: #2fae62; color: white; }
 .status-pill.failed { background: var(--danger); color: white; }
 

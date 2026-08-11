@@ -4,6 +4,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { db, matchRequestRowToJson } from "../db";
+import { analyzeProductImage } from "../vision";
+import { findSimilarRecalls } from "../matching";
 
 export const matchRouter = Router();
 
@@ -44,22 +46,48 @@ const updateStmt = db.prepare(`
   WHERE id = @id
 `);
 
-// Create a new match request by uploading a product photo. A Claude
-// session (interactive, or a Routine watching pending requests) then
-// analyzes the image, calls mcp__MCP__match_recall_by_image_features for
-// domestic candidates and text search on the overseas MCP for candidates,
-// and reports results back via PATCH /:id. See docs/INGESTION.md.
-matchRouter.post("/", upload.single("photo"), (req, res) => {
+// Create a new match request by uploading a product photo. Analysis runs
+// synchronously in this request: the photo is sent to Claude (vision) to
+// extract product identity/keywords, then those keywords are matched
+// against the accumulated recalls table (FTS5, ranked by relevance) to
+// produce a "관련 상품" list. Requires ANTHROPIC_API_KEY. See
+// docs/INGESTION.md for the architecture and its limitations (text-keyword
+// matching against locally-ingested data, not a live image-embedding index).
+matchRouter.post("/", upload.single("photo"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "photo file is required (field name 'photo')" });
 
   const id = randomUUID();
+  const imagePath = req.file.path;
+  const userNote = typeof req.body?.note === "string" ? req.body.note : null;
   insertStmt.run({
     id,
-    image_path: path.relative(process.cwd(), req.file.path),
-    note: typeof req.body?.note === "string" ? req.body.note : null,
+    image_path: path.relative(process.cwd(), imagePath),
+    note: userNote,
   });
 
-  res.status(201).json({ id, status: "pending" });
+  try {
+    const analysis = await analyzeProductImage(imagePath);
+    const candidates = findSimilarRecalls(analysis);
+    updateStmt.run({
+      id,
+      status: "completed",
+      analysis_json: JSON.stringify(analysis),
+      candidates_json: JSON.stringify(candidates),
+      note: null,
+    });
+  } catch (err: any) {
+    const failureNote = `분석 실패: ${err.message ?? "알 수 없는 오류"}`;
+    updateStmt.run({
+      id,
+      status: "failed",
+      analysis_json: null,
+      candidates_json: null,
+      note: userNote ? `${userNote}\n(${failureNote})` : failureNote,
+    });
+  }
+
+  const row = db.prepare(`SELECT * FROM match_requests WHERE id = ?`).get(id);
+  res.status(201).json(matchRequestRowToJson(row as any));
 });
 
 matchRouter.get("/", (_req, res) => {
@@ -80,7 +108,7 @@ matchRouter.patch("/:id", (req, res) => {
   if (!existing) return res.status(404).json({ error: "not_found" });
 
   const { status, analysis, candidates, note } = req.body ?? {};
-  if (status && !["pending", "completed", "failed"].includes(status)) {
+  if (status && !["pending", "processing", "completed", "failed"].includes(status)) {
     return res.status(400).json({ error: "invalid status" });
   }
 

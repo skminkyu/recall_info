@@ -21,15 +21,18 @@
 - `docs/INGESTION.md` — MCP 데이터 수집 및 사진 매칭 워크플로 상세 설명 (**필독**,
   특히 "주기적 수집" 관련 알려진 제약사항)
 
-MCP 도구는 Claude 세션 안에서만 호출 가능하므로, 이 저장소의 앱은 "MCP를 직접
-호출하는 서버"가 아니라 "Claude 세션이 MCP를 호출해 넣어주는 데이터를 누적·검색·
-서빙하는 앱"입니다. 자세한 수집/매칭 흐름은 `docs/INGESTION.md`를 참고하세요.
+MCP 도구는 Claude 세션 안에서만 호출 가능하므로, 데이터 **수집**은 "Claude 세션이
+MCP를 호출해 넣어주는 데이터를 누적·검색·서빙하는" 구조입니다. 반면 사진으로
+유사 제품을 찾는 **매칭**은 서버가 Anthropic API를 직접 호출해 업로드 즉시
+자동으로 처리합니다(`ANTHROPIC_API_KEY` 필요). 자세한 흐름은
+`docs/INGESTION.md`를 참고하세요.
 
 ## 실행
 
 ```bash
 npm install
 npm run seed    # data/seeds/*.json 전체를 적재해 로컬 DB 생성/갱신
+export ANTHROPIC_API_KEY=sk-ant-...   # 사진 매칭 기능에 필요 (.env.example 참고)
 npm run dev      # http://localhost:3000
 ```
 
@@ -56,10 +59,10 @@ npm run dev      # http://localhost:3000
 | GET | `/api/recalls/stats` | 출처별 누적 건수, 최신 게시일 |
 | GET | `/api/recalls/:id` | 리콜 상세 (원본 raw JSON 포함) |
 | POST | `/api/ingest` | `{ source_type, raw: [...] }` MCP 원본 데이터 적재(upsert) |
-| POST | `/api/match-requests` | 제품 사진 업로드 (multipart, field `photo`) → 매칭 요청 생성 |
+| POST | `/api/match-requests` | 제품 사진 업로드 (multipart, field `photo`) → 서버가 즉시 Anthropic API로 분석하고 유사 리콜 후보까지 채워서 응답 |
 | GET | `/api/match-requests` | 매칭 요청 목록 |
 | GET | `/api/match-requests/:id` | 매칭 요청 상세 |
-| PATCH | `/api/match-requests/:id` | Claude 세션이 분석한 `analysis`/`candidates` 결과 반영 |
+| PATCH | `/api/match-requests/:id` | (수동 보정용) Claude 세션이 직접 분석한 `analysis`/`candidates`로 덮어쓰기 |
 
 ## 데이터 모델
 
@@ -70,12 +73,14 @@ npm run dev      # http://localhost:3000
 `korea_relevance`, `raw_json`(원본 전체 보존). `(source_type, source_code,
 external_id)` 유니크 제약으로 재수집 시 자동 upsert됩니다.
 
-`match_requests` 테이블은 업로드된 사진과 분석 상태(`pending` → `completed`/
-`failed`), Claude가 산출한 `analysis`/`candidates`를 저장합니다.
+`match_requests` 테이블은 업로드된 사진과 분석 상태(`pending` → `processing` →
+`completed`/`failed`), 분석 결과인 `analysis`/`candidates`를 저장합니다.
 
 ## 사진으로 유사 리콜 찾기
 
-`/match.html`에서 사진을 올리면 요청이 `pending` 상태로 쌓입니다. 실제 이미지
-분석과 MCP 매칭 호출은 Claude 세션이 수행해 결과를 `PATCH /api/match-requests/:id`
-로 채워 넣습니다. 절차는 `docs/INGESTION.md`의 "사진으로 유사 리콜 후보 찾기"
-섹션을 참고하세요.
+`/match.html`에서 사진을 올리면 서버가 그 요청 안에서 바로 Anthropic API로
+사진을 분석(`src/vision.ts`)하고, 추출된 키워드로 누적 리콜 DB를 검색
+(`src/matching.ts`, FTS5 유사도 순)해 결과를 응답합니다 — 몇 초 내로 화면에
+"관련 상품" 목록이 뜹니다. `ANTHROPIC_API_KEY`가 없거나 호출이 실패하면 해당
+요청만 `failed`로 표시되고 앱 전체는 계속 정상 동작합니다. 자세한 내용과 수동
+보정 방법은 `docs/INGESTION.md`의 "사진으로 유사 리콜 후보 찾기" 섹션 참고.

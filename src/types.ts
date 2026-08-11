@@ -30,7 +30,7 @@ export interface RecallRow extends Omit<NormalizedRecall, "image_urls" | "raw" |
   updated_at: string;
 }
 
-export type MatchRequestStatus = "pending" | "completed" | "failed";
+export type MatchRequestStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface MatchCandidate {
   recall_id: string;

@@ -5,8 +5,10 @@ services:
     plan: free
     region: singapore
     buildCommand: npm ci && npm run build
-    startCommand: npm run seed && npm start
+    startCommand: npm run seed:prod && npm start
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: ANTHROPIC_API_KEY
+        sync: false
     healthCheckPath: /api/recalls/stats
